@@ -80,17 +80,26 @@ def chat_gpt_json(user_input, history):
             messages=[{"role": "system", "content": SYSTEM_PROMPT}] + history
         )
         msg = res.choices[0].message.content
-        print("🧠 GPT raw JSON:", msg)
-        parsed = json.loads(msg)
-        reply = parsed.get("response", "")
-        fields = parsed.get("fields", {})
+        print("🧠 GPT raw response:", msg)
+
+        # Try parsing clean JSON
+        try:
+            parsed = json.loads(msg)
+            reply = parsed.get("response", "")
+            fields = parsed.get("fields", {})
+        except json.JSONDecodeError as je:
+            print("⚠️ JSON decode error:", je)
+            reply = "Sorry, I didn’t understand that. Could you say it again?"
+            fields = {}
+
         history.append({"role": "assistant", "content": msg})
     except Exception as e:
-        print("❌ GPT error:", e)
-        reply = "Sorry, something went wrong. Could you say that again?"
+        print("❌ GPT call error:", e)
+        reply = "Sorry, something went wrong with the server."
         fields = {}
         history.append({"role": "assistant", "content": reply})
     return reply, fields, history
+
 
 
 # ========== START CALL ==========
