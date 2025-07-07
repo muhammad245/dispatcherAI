@@ -92,6 +92,7 @@ def chat_gpt_json(user_input, history):
         history.append({"role": "assistant", "content": reply})
     return reply, fields, history
 
+
 # ========== START CALL ==========
 @app.route("/voice", methods=["POST"])
 def voice():
