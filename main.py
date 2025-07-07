@@ -105,23 +105,58 @@ def chat_gpt_json(user_input, history):
 # ==========
 # START CALL
 # ==========
-@app.route("/voice", methods=["POST"])
-def voice():
-    sid = request.form["CallSid"]
-    conversations[sid] = []
+@app.route("/continue", methods=["POST"])
+def cont():
+    sid = request.form.get("CallSid")
+    user_input = request.form.get("SpeechResult", "").strip()
 
-    # ✅ Initialize booking dict with all expected fields
-    bookings[sid] = {
+    if not sid:
+        return "Missing CallSid", 400
+
+    if not user_input:
+        resp = VoiceResponse()
+        g = Gather(input="speech", action="/continue", method="POST", timeout=6)
+        g.say("Sorry, I didn't catch that. Could you say it again?")
+        resp.append(g)
+        return Response(str(resp), mimetype="text/xml")
+
+    # Use safe default if conversation doesn't exist yet
+    convo = conversations.get(sid, [])
+    book = bookings.get(sid, {
         "name": "", "passengers": "", "luggage": "", "child_seats": "",
         "wheelchair": "", "pickup_postcode": "", "pickup": "",
         "dropoff": "", "phone": request.form.get("From", "Unknown")
-    }
+    })
+
+    reply, new_fields, convo = chat_gpt_json(user_input, convo)
+    conversations[sid] = convo
+    bookings[sid] = book  # make sure updated
+
+    for k, v in new_fields.items():
+        if k in book and v:
+            book[k] = v
+
+    if book.get("pickup") and book.get("pickup_postcode"):
+        corrected = correct_address(book["pickup"], book["pickup_postcode"])
+        book["pickup"] = corrected
+
+    if not new_fields.get("confirmed") and user_input.lower() in ["yes", "yeah", "correct"]:
+        new_fields["confirmed"] = True
 
     resp = VoiceResponse()
-    gather = Gather(input="speech", action="/continue", method="POST", timeout=6)
-    gather.say("Welcome! Let's book your ride. First, what's your name?")
-    resp.append(gather)
+    if new_fields.get("confirmed"):
+        with open(CSV_FILE, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([book.get(k, "") for k in FIELDS])
+        resp.say("You'll receive an SMS confirmation shortly. Have a lovely day!")
+        resp.hangup()
+    else:
+        g = Gather(input="speech", action="/continue", method="POST", timeout=6)
+        g.say(reply)
+        resp.append(g)
+
     return Response(str(resp), mimetype="text/xml")
+
 
 # ==========
 # CONTINUE DIALOGUE
