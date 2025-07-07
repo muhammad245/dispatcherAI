@@ -8,17 +8,13 @@ from twilio.twiml.voice_response import VoiceResponse, Gather
 import openai
 from dotenv import load_dotenv
 
-
-# ==========
-# CONFIGURATION
-# ==========
+# ========== LOAD ENVIRONMENT VARIABLES ==========
+load_dotenv()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY  
 TWILIO_NUMBER = os.environ.get("TWILIO_NUMBER")
-           
-
 openai.api_key = OPENAI_API_KEY
 
+# ========== FLASK APP SETUP ==========
 app = Flask(__name__)
 conversations = {}
 bookings = {}
@@ -34,7 +30,7 @@ if not os.path.exists(CSV_FILE):
         writer = csv.writer(f)
         writer.writerow(FIELDS)
 
-# ==========
+# ========== SYSTEM PROMPT ==========
 SYSTEM_PROMPT = """
 You are a friendly and funny dispatch call agent for a transportation company. Your goal is to collect booking information efficiently and professionally. Be conversational and adapt to how the customer provides information.
 
@@ -44,7 +40,7 @@ Respond ONLY in this JSON format:
   "fields": {
     "name": "",
     "passengers": "",
-    "luggage": "",           ← must be in format like "10 kg" or "22 pounds"
+    "luggage": "",
     "child_seats": "",
     "wheelchair": "",
     "pickup": "",
@@ -56,7 +52,6 @@ Respond ONLY in this JSON format:
 Instructions:
 1. Extract fields mentioned and populate them.
 2. For "luggage", extract ONLY a numeric value followed by "kg", "kgs", or "pounds". Ignore non-numeric info like "pages", "books", etc.
-   - Examples: "10 kg", "22 kgs", "30 pounds"
 3. If the user says just a number like "10", assume "10 kg".
 4. Only ask for missing fields.
 5. When all fields are filled, confirm in this format:
@@ -66,10 +61,7 @@ Instructions:
    "You'll receive an SMS confirmation shortly. Have a lovely day!"
 """
 
-
-# ==========
-# ADDRESS CORRECTION
-# ==========
+# ========== ADDRESS CORRECTION ==========
 def correct_address(spoken_addr, postcode):
     try:
         r = requests.get(f"https://api.postcodes.io/postcodes/{postcode}/autocomplete")
@@ -79,9 +71,7 @@ def correct_address(spoken_addr, postcode):
     matches = difflib.get_close_matches(spoken_addr, data, n=1, cutoff=0.6)
     return matches[0] if matches else spoken_addr
 
-# ==========
-# GPT CALL
-# ==========
+# ========== OPENAI GPT CALL ==========
 def chat_gpt_json(user_input, history):
     history.append({"role": "user", "content": user_input})
     try:
@@ -90,11 +80,11 @@ def chat_gpt_json(user_input, history):
             messages=[{"role": "system", "content": SYSTEM_PROMPT}] + history
         )
         msg = res.choices[0].message.content
+        print("🧠 GPT raw JSON:", msg)
         parsed = json.loads(msg)
         reply = parsed.get("response", "")
         fields = parsed.get("fields", {})
         history.append({"role": "assistant", "content": msg})
-        print("🧠 GPT raw JSON:", msg)
     except Exception as e:
         print("❌ GPT error:", e)
         reply = "Sorry, something went wrong. Could you say that again?"
@@ -102,9 +92,25 @@ def chat_gpt_json(user_input, history):
         history.append({"role": "assistant", "content": reply})
     return reply, fields, history
 
-# ==========
-# START CALL
-# ==========
+# ========== START CALL ==========
+@app.route("/voice", methods=["POST"])
+def voice():
+    sid = request.form.get("CallSid")
+    conversations[sid] = []
+
+    bookings[sid] = {
+        "name": "", "passengers": "", "luggage": "", "child_seats": "",
+        "wheelchair": "", "pickup_postcode": "", "pickup": "",
+        "dropoff": "", "phone": request.form.get("From", "Unknown")
+    }
+
+    resp = VoiceResponse()
+    gather = Gather(input="speech", action="/continue", method="POST", timeout=6)
+    gather.say("Welcome! Let's book your ride. First, what's your name?")
+    resp.append(gather)
+    return Response(str(resp), mimetype="text/xml")
+
+# ========== CONTINUE CALL ==========
 @app.route("/continue", methods=["POST"])
 def cont():
     sid = request.form.get("CallSid")
@@ -156,16 +162,6 @@ def cont():
 
     return Response(str(resp), mimetype="text/xml")
 
-
-# ==========
-# RUN APP
-# ==========
+# ========== RUN FLASK APP ==========
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
-
-
-
-
-
-
-
