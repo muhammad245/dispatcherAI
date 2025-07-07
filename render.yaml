@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: twilio-booking-app
+    env: python
+    buildCommand: ""
+    startCommand: python main.py
+    envVars:
+      - key: OPENAI_API_KEY
+        value: YOUR-OPENAI-KEY
+      - key: TWILIO_NUMBER
+        value: YOUR-TWILIO-NUMBER
