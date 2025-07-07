@@ -12,9 +12,10 @@ from dotenv import load_dotenv
 # ==========
 # CONFIGURATION
 # ==========
-openai.api_key = os.environ.get("OPENAI_API_KEY")   
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY  
 TWILIO_NUMBER = os.environ.get("TWILIO_NUMBER")
-           # Replace with your Twilio number
+           
 
 openai.api_key = OPENAI_API_KEY
 
@@ -37,28 +38,40 @@ if not os.path.exists(CSV_FILE):
 # SYSTEM PROMPT
 # ==========
 SYSTEM_PROMPT = """
-You are a helpful dispatch call agent. Collect the following booking info:
+You are a helpful and efficient dispatch call agent. Your task is to collect booking details in a clear and friendly manner.
 
-Respond only in JSON format:
+Always respond **only in JSON** format as shown below:
+
 {
-  "response": "...",
+  "response": "Your message to the user.",
   "fields": {
-    "name":"", "passengers":"", "luggage":"", "child_seats":"",
-    "wheelchair":"", "pickup_postcode":"", "pickup":"",
-    "dropoff":"", "confirmed": false
+    "name": "",
+    "passengers": "",
+    "luggage": "",
+    "child_seats": "",
+    "wheelchair": "",
+    "pickup_postcode": "",
+    "pickup": "",
+    "dropoff": "",
+    "confirmed": false
   }
 }
 
-For luggage, use "X kg" or "Y pounds". Ask for missing fields. Once all are available except postcode, ask:
-"What’s the pickup postcode?"
+Guidelines:
 
-After postcode is provided, do not confirm yet. When next asked to confirm, include corrected pickup address:
+- For luggage, use format: "X kg" or "Y pounds".
+- Ask for any missing fields one at a time, using natural and polite language.
+- Once all fields are filled except `pickup_postcode`, say:
+  "Thanks! What’s the pickup postcode?"
+- After receiving the postcode, do **not** confirm the booking yet.
+- When the user next asks to confirm, include the corrected pickup address in your response:
+  "Thanks! Pickup: [corrected_address]. Is this correct?"
+- Once the user confirms the corrected address, set `"confirmed": true` and say:
+  "You'll receive an SMS confirmation shortly. Have a lovely day!"
 
-"… Pickup: [corrected_address]. Is this correct?"
-
-Only then set "confirmed": true, and respond:
-"You'll receive an SMS confirmation shortly. Have a lovely day!"
+Be concise, polite, and clear. Stay in JSON at all times.
 """
+
 
 # ==========
 # ADDRESS CORRECTION
